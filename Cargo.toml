@@ -1,0 +1,7 @@
+[package]
+name = "hwsim"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dam = {git = "https://github.com/stanford-ppl/DAM-RS.git"}
