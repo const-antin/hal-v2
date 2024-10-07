@@ -1,11 +1,11 @@
 // PipelineStage consisting out of ALU's and Registers
 use dam::structures::Time;
 
-use crate::{alu::{ALUInput, ALURtConfig}, value::Value};
+use crate::{alu::{ALUInput, ALURtConfig}, scalar::Scalar};
 
 pub struct PipelineStage {
     pub alu_configs: Vec<ALURtConfig>,
-    pub data: Vec<Value>,
+    pub data: Vec<Scalar>,
     pub delay: usize
 }
 
@@ -21,16 +21,16 @@ impl PipelineStage {
 
         PipelineStage {
             alu_configs: alu_configs,
-            data: vec![Value::I32(0); len],
+            data: vec![Scalar::I32(0); len],
             delay: delay
         }
     }
 
     // Returns time after pipeline stage completion
-    pub fn iter(&mut self, prev_stage: &Vec<Value>, time: Time) -> (&Vec<Value>, Time) {
+    pub fn iter(&mut self, prev_stage: &Vec<Scalar>, time: Time) -> (&Vec<Scalar>, Time) {
         assert_eq!(prev_stage.len(), self.data.len());
 
-        let mut next_data = vec![Value::I32(0); self.data.len()];
+        let mut next_data = vec![Scalar::I32(0); self.data.len()];
 
         for (idx, alu_config) in 
                                                 self.alu_configs.iter()
@@ -45,7 +45,7 @@ impl PipelineStage {
         (&self.data, time + self.delay as u64)
     }
 
-    fn get_input(&self, alu_input: &ALUInput, prev_stage: &Vec<Value>, idx: usize) -> Value {
+    fn get_input(&self, alu_input: &ALUInput, prev_stage: &Vec<Scalar>, idx: usize) -> Scalar {
         match alu_input {
             ALUInput::NEXT => self.data[idx].clone(),
             ALUInput::PREV => prev_stage[idx].clone(),
@@ -61,7 +61,7 @@ impl PipelineStage {
 mod tests {
     use dam::structures::Time;
 
-    use crate::value::Value;
+    use crate::scalar::Scalar;
     use crate::alu::{ALUInput, ALUOp, ALURtConfig};
     use super::PipelineStage;
 
@@ -85,7 +85,7 @@ mod tests {
     fn correct_delay_test() {
         let t = Time::new(0);
         let mut pl = prepare();
-        let input = vec![Value::I32(1), Value::I32(2)];
+        let input = vec![Scalar::I32(1), Scalar::I32(2)];
 
         let (_, t_d) = pl.iter(&input, t);
         assert_eq!(t_d.time(), pl.alu_configs.iter().map(|x| x.op.delay()).max().unwrap() as u64);
@@ -95,13 +95,13 @@ mod tests {
     fn pipeline_holds_state_test() {
         let t_0 = Time::new(0);
         let mut pl = prepare();
-        let input = vec![Value::I32(1), Value::I32(2)];
+        let input = vec![Scalar::I32(1), Scalar::I32(2)];
 
         let (_, t_1) = pl.iter(&input, t_0);
         let _ = pl.iter(&input, t_1);
 
-        assert_eq!(pl.data[0], Value::I32(2));
-        assert_eq!(pl.data[1], Value::I32(4));
+        assert_eq!(pl.data[0], Scalar::I32(2));
+        assert_eq!(pl.data[1], Scalar::I32(4));
     }
 
 }

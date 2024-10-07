@@ -1,6 +1,6 @@
 use dam::{channel::{ChannelElement, Receiver, Sender}, context::Context, dam_macros::context_macro, structures::Time, types::DAMType};
 
-use crate::{alu::{ALUHwConfig, ALURtConfig}, pipeline_stage::PipelineStage, value::Value};
+use crate::{alu::{ALUHwConfig, ALURtConfig}, pipeline_stage::PipelineStage, scalar::Scalar};
 
 pub struct HwConfig {
     pub alu_configs: Vec<Vec<ALUHwConfig>>, // alu_configs[row][column]
@@ -20,7 +20,7 @@ pub struct PCURuntimeData {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct PCUData {
-    data: Vec<Value>
+    data: Vec<Scalar>
 }
 
 impl DAMType for PCUData {
@@ -69,7 +69,7 @@ impl PCU {
         }
     }
 
-    fn iter(&mut self, input: &Vec<Value>, time: Time) -> Time {
+    fn iter(&mut self, input: &Vec<Scalar>, time: Time) -> Time {
         // Run a pipeline iteration.
         let (data_out, t_fin) = self.rt_data.pipeline_stages.iter_mut().fold((input, time),
         |(data, time), stage| {
@@ -82,7 +82,7 @@ impl PCU {
     }
 
     fn iter_bubble(&mut self, time: Time) -> Time {
-        let bubble = vec![Value::I32(0); self.rt_data.pipeline_stages.len()];
+        let bubble = vec![Scalar::I32(0); self.rt_data.pipeline_stages.len()];
         self.iter(&bubble, time)
     }
 
@@ -125,7 +125,7 @@ mod tests {
 
     use dam::{simulation::{InitializationOptionsBuilder, ProgramBuilder, RunOptions}, utility_contexts::{CheckerContext, GeneratorContext}};
 
-    use crate::{alu::{ALUHwConfig, ALUInput, ALUOp, ALURtConfig}, pcu::PCUData, value::Value};
+    use crate::{alu::{ALUHwConfig, ALUInput, ALUOp, ALURtConfig}, pcu::PCUData, scalar::Scalar};
 
     use super::{HwConfig, RtConfig, PCU};
 
@@ -156,13 +156,13 @@ mod tests {
 
         let snd_gen = (0..10).map(|x| {
             PCUData{data: vec![
-                Value::I32(x), Value::I32(2*x)
+                Scalar::I32(x), Scalar::I32(2*x)
                 ]}
         });
 
         let rcv_gen = std::iter::once(0).chain(0..10).map(|x| {
             PCUData{data: vec![
-                Value::I32(3*x), Value::I32(0)
+                Scalar::I32(3*x), Scalar::I32(0)
             ]}
         });
 

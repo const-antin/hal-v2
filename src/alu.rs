@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::value::Value;
+use crate::scalar::Scalar;
 
 // This should maybe be moved to pcu.rs or to pipeline_stage.rs.
 // TODO: Change the names instead of supressing the warnings.
@@ -43,16 +43,16 @@ impl ALUOp {
         }
     }
 
-    pub fn apply(&self, lhs: &Value, rhs: &Value) -> Value {
+    pub fn apply(&self, lhs: &Scalar, rhs: &Scalar) -> Scalar {
         match (self, lhs, rhs) {
-            (Self::ADD_I32, Value::I32(x), Value::I32(y)) => Value::I32(x+y),
-            (Self::SUB_I32, Value::I32(x), Value::I32(y)) => Value::I32(x-y),
-            (Self::MUL_I32, Value::I32(x), Value::I32(y)) => Value::I32(x*y),
-            (Self::DIV_I32, Value::I32(x), Value::I32(y)) => Value::I32(x/y),
-            (Self::SUB_FP32, Value::FP32(x), Value::FP32(y)) => Value::FP32(x+y),
-            (Self::MUL_FP32, Value::FP32(x), Value::FP32(y)) => Value::FP32(x-y),
-            (Self::ADD_FP32, Value::FP32(x), Value::FP32(y)) => Value::FP32(x*y),
-            (Self::DIV_FP32, Value::FP32(x), Value::FP32(y)) => Value::FP32(x/y),
+            (Self::ADD_I32, Scalar::I32(x), Scalar::I32(y)) => Scalar::I32(x+y),
+            (Self::SUB_I32, Scalar::I32(x), Scalar::I32(y)) => Scalar::I32(x-y),
+            (Self::MUL_I32, Scalar::I32(x), Scalar::I32(y)) => Scalar::I32(x*y),
+            (Self::DIV_I32, Scalar::I32(x), Scalar::I32(y)) => Scalar::I32(x/y),
+            (Self::SUB_FP32, Scalar::FP32(x), Scalar::FP32(y)) => Scalar::FP32(x+y),
+            (Self::MUL_FP32, Scalar::FP32(x), Scalar::FP32(y)) => Scalar::FP32(x-y),
+            (Self::ADD_FP32, Scalar::FP32(x), Scalar::FP32(y)) => Scalar::FP32(x*y),
+            (Self::DIV_FP32, Scalar::FP32(x), Scalar::FP32(y)) => Scalar::FP32(x/y),
             _ => panic!("Unsupported arithmetic operation!")
         }
     }
@@ -60,16 +60,16 @@ impl ALUOp {
 
 #[cfg(test)]
 mod tests {
-    use crate::value::Value;
+    use crate::scalar::Scalar;
     use super::ALUOp;
 
     #[test]
     fn test_alu_op_int_add() {
         let op = ALUOp::ADD_I32;
-        let v1 = Value::I32(5);
-        let v2 = Value::I32(10);
+        let v1 = Scalar::I32(5);
+        let v2 = Scalar::I32(10);
         let r = op.apply(&v1, &v2);
-        if let Value::I32(x) = r {
+        if let Scalar::I32(x) = r {
             assert_eq!(x, 15, "Failed addition.")
         } else {
             assert!(false, "Wrong resulting type.")

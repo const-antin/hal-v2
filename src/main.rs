@@ -2,7 +2,7 @@ mod alu;
 mod pcu; 
 mod pmu; 
 mod interconnect;
-mod value;
+mod scalar;
 mod pipeline_stage;
 
 fn main() {
