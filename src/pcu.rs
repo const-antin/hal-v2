@@ -20,7 +20,7 @@ pub struct PCURuntimeData {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct PCUData {
-    data: Vec<Scalar>
+    pub data: Vec<Scalar>
 }
 
 impl DAMType for PCUData {

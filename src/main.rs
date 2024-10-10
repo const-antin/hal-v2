@@ -4,6 +4,7 @@ mod pmu;
 mod interconnect;
 mod scalar;
 mod pipeline_stage;
+mod switch;
 
 fn main() {
     /*
