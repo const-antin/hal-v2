@@ -11,16 +11,16 @@ pub enum SwitchMode {
 }
 
 pub struct HwConfig {
-    simd: usize, 
-    datatype_width: usize, 
-    num_inputs: usize,
-    num_outputs: usize,
-    mode: SwitchMode
+    pub simd: usize, 
+    pub datatype_width: usize, 
+    pub num_inputs: usize,
+    pub num_outputs: usize,
+    pub mode: SwitchMode
     // todo: Add parameterizable routing restructions? 
 }
 
 pub struct RtConfig {
-    routing_table: HashMap<usize, Vec<usize>> // routing_table[in] -> out
+    pub routing_table: HashMap<usize, Vec<usize>> // routing_table[in] -> out
 }
 
 pub struct RtData {
@@ -37,7 +37,7 @@ pub struct Switch {
 
 // Cycle-accurate, has backpressure
 impl Switch {
-    fn new(hw_config: HwConfig, rt_config: RtConfig, receivers: Vec<Receiver<PCUData>>, senders: Vec<Sender<PCUData>>) -> Switch {
+    pub fn new(hw_config: HwConfig, rt_config: RtConfig, receivers: Vec<Receiver<PCUData>>, senders: Vec<Sender<PCUData>>) -> Switch {
 
         assert_eq!(hw_config.num_inputs, receivers.len());
         assert_eq!(hw_config.num_outputs, senders.len());

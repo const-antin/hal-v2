@@ -2,11 +2,13 @@ use dam::{channel::{ChannelElement, Receiver, Sender}, context::Context, dam_mac
 
 use crate::{alu::{ALUHwConfig, ALURtConfig}, pipeline_stage::PipelineStage, scalar::Scalar};
 
+#[derive(Clone)]
 pub struct HwConfig {
     pub alu_configs: Vec<Vec<ALUHwConfig>>, // alu_configs[row][column]
     pub number_chained_counters: usize
 }
 
+#[derive(Clone)]
 pub struct RtConfig {
     pub alu_configs: Vec<Vec<ALURtConfig>>, // alu_configs[row][column]
     pub counter_max_values: Vec<usize>
@@ -37,7 +39,7 @@ pub struct PCU {
 }
 
 impl PCU {
-    fn new(hw_cfg: HwConfig, rt_cfg: RtConfig, input: Receiver<PCUData>, output: Sender<PCUData>) -> PCU {
+    pub fn new(hw_cfg: HwConfig, rt_cfg: RtConfig, input: Receiver<PCUData>, output: Sender<PCUData>) -> PCU {
         PCU::verify_alu_ops(&hw_cfg.alu_configs, &rt_cfg.alu_configs);
 
         let rt_data = PCURuntimeData {
