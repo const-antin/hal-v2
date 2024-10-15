@@ -1,23 +1,26 @@
 use dam::{channel::{ChannelElement, Receiver, Sender}, context::Context, dam_macros::context_macro, structures::Time, types::DAMType};
 
-use crate::{alu::{ALUHwConfig, ALURtConfig}, pipeline_stage::PipelineStage, scalar::Scalar};
+use crate::{alu::{ALUHwConfig, ALURtConfig}, pipeline_stage::{self, PipelineStage}, scalar::Scalar};
 
 #[derive(Clone)]
 pub struct HwConfig {
-    pub alu_configs: Vec<Vec<ALUHwConfig>>, // alu_configs[row][column]
-    pub number_chained_counters: usize
+    pub alu_configs: Vec<ALUHwConfig>, // alu_configs[row][column]
+    pub num_simd_lanes: usize,
+    // pub num_registers_per_stage: usize,
+    // pub num_scalar_inputs: usize,
+    // pub num_scalar_outputs: usize,
+    pub num_vector_input_ports: usize
 }
 
 #[derive(Clone)]
 pub struct RtConfig {
-    pub alu_configs: Vec<Vec<ALURtConfig>>, // alu_configs[row][column]
-    pub counter_max_values: Vec<usize>
+    pub alu_configs: Vec<ALURtConfig>, // alu_configs[row][column]
 }
 
 pub struct PCURuntimeData {
     pipeline_stages: Vec<PipelineStage>,
-    input: Receiver<PCUData>,
-    output: Sender<PCUData>
+    input: Vec<Receiver<PCUData>>,
+    output: Vec<Sender<PCUData>>
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -39,12 +42,12 @@ pub struct PCU {
 }
 
 impl PCU {
-    pub fn new(hw_cfg: HwConfig, rt_cfg: RtConfig, input: Receiver<PCUData>, output: Sender<PCUData>) -> PCU {
+    pub fn new(hw_cfg: HwConfig, rt_cfg: RtConfig, input: Vec<Receiver<PCUData>>, output: Vec<Sender<PCUData>>) -> PCU {
         PCU::verify_alu_ops(&hw_cfg.alu_configs, &rt_cfg.alu_configs);
 
         let rt_data = PCURuntimeData {
             pipeline_stages: rt_cfg.alu_configs.iter().map(
-                |cfg| {PipelineStage::new(cfg.to_vec())}).collect(),
+                |cfg| {PipelineStage::new(cfg.clone(), hw_cfg.num_simd_lanes, 1)}).collect(),
             input: input,
             output: output
             
@@ -56,42 +59,48 @@ impl PCU {
             rt_data: rt_data,
             context_info: Default::default()
         };
-        pcu.rt_data.input.attach_receiver(&pcu);
-        pcu.rt_data.output.attach_sender(&pcu);
+        pcu.rt_data.input .iter().for_each(|i| i.attach_receiver(&pcu));
+        pcu.rt_data.output.iter().for_each(|i| i.attach_sender(&pcu));
         pcu
     }
 
-    fn verify_alu_ops(hw_alus: &Vec<Vec<ALUHwConfig>>, rt_alus: &Vec<Vec<ALURtConfig>>) -> () {
+    fn verify_alu_ops(hw_alus: &Vec<ALUHwConfig>, rt_alus: &Vec<ALURtConfig>) -> () {
         assert_eq!(hw_alus.len(), rt_alus.len());
-        for (hw_col, rt_col) in hw_alus.iter().zip(rt_alus.iter()) {
-            assert_eq!(hw_col.len(), rt_col.len());
-            for (hw_el, sw_el) in hw_col.iter().zip(rt_col.iter()) {
-                assert!(hw_el.supported_ops.contains(&sw_el.op));
-            }
+        for (hw_el, sw_el) in hw_alus.iter().zip(rt_alus.iter()) {
+            assert!(hw_el.supported_ops.contains(&sw_el.op));
         }
     }
 
-    fn iter(&mut self, input: &Vec<Scalar>, time: Time) -> Time {
+    fn iterate(&mut self, input: &Vec<Vec<Scalar>>, time: Time) -> Time {
         // Run a pipeline iteration.
         let (data_out, t_fin) = self.rt_data.pipeline_stages.iter_mut().fold((input, time),
         |(data, time), stage| {
-            stage.iter(data, time)
+            stage.iterate(data, time)
         });
+
+        // Enqueue the outputs.
         let data_out = data_out.clone();
-        self.rt_data.output.enqueue(&self.time,  // TODO: Double-Check this. There might be a possible bug here. 
-            ChannelElement::new(t_fin, PCUData { data: data_out })).unwrap();
+        self.rt_data.output
+            .iter()
+            .zip(data_out.iter())
+            .filter(|(sender, data)| {data.len() > 0})
+            .for_each(|(sender, data)| {
+                sender.enqueue(&self.time, ChannelElement::new(t_fin, PCUData { data: data.clone() })).unwrap();
+        });
         t_fin
     }
 
+    /*
     fn iter_bubble(&mut self, time: Time) -> Time {
-        let bubble = vec![Scalar::I32(0); self.rt_data.pipeline_stages.len()];
+        let bubble = vec![Scalar::I32(0); self.hw_config.alu_configs[0].len()];
         self.iter(&bubble, time)
     }
+     */
 
     fn fill_with_bubbles_until_now(&mut self, mut last_iter_time: Time) -> () {
         let input_time = self.time.tick();
         while last_iter_time < input_time {
-            self.iter_bubble(last_iter_time.clone());
+            // self.iter_bubble(last_iter_time.clone());
             last_iter_time += 1;
         }
     }
@@ -105,18 +114,29 @@ impl Context for PCU {
         loop {
             let old_time = self.time.tick();
             // Get next input, insert bubbles if there was a delay.
-            let next = self.rt_data.input.dequeue(&self.time);
-            match next {
-                Ok(data) => {
-                    let input = data.data.data;
-                    self.fill_with_bubbles_until_now(old_time);
-                    self.iter(&input, self.time.tick());
-                    self.time.incr_cycles(1);
-                }
-                Err(_) => {
-                    return; // We currently close the pipeline when the instream is closed.
+            // TODO: Only get input from selected input channels. 
+
+            // Dequeue from every ALU selected input:
+            let selected_inputs = self.rt_config.alu_configs[0].get_input_regs();
+
+            // Fill an input vector with all zeros except for the selected inputs.
+            let mut input = 
+                vec![
+                    vec![Scalar::I32(0); self.hw_config.num_simd_lanes]; 
+                self.hw_config.num_vector_input_ports];
+
+            for i in selected_inputs {
+                let next = self.rt_data.input[i].dequeue(&self.time);
+                match next {
+                    Ok(data) => {
+                        input[i] = data.data.data;
+                    }
+                    Err(_) => {
+                        return; // We currently close the pipeline when the instream is closed.
+                    }
                 }
             }
+            self.iterate(&input, self.time.tick());
         }
     }
 }
@@ -134,50 +154,55 @@ mod tests {
     #[test]
     fn simple_pcu_test() {
         let mut parent = ProgramBuilder::default();
-        const CHAN_SIZE: usize = 8;
+        const CHAN_SIZE: usize = 1;
         
         let hw_config = HwConfig {
-            alu_configs: vec![vec![ALUHwConfig {
+            alu_configs: vec![ALUHwConfig {
                 supported_ops: HashSet::from([ALUOp::ADD_I32, ALUOp::MUL_I32])
-            };2];2],
-            number_chained_counters: 0,
+            };1],
+            num_simd_lanes: 1,
+            num_vector_input_ports: 2,
         };
 
         let rt_config = RtConfig {
-            alu_configs: vec![vec![
-                ALURtConfig{op: ALUOp::ADD_I32, in_a: ALUInput::PREV, in_b: ALUInput::PREV_BELOW}, 
-                ALURtConfig{op: ALUOp::MUL_I32, in_a: ALUInput::NEXT, in_b: ALUInput::PREV}]
-                ; 2],
-            counter_max_values: vec![],
+            alu_configs: vec![
+                ALURtConfig{op:ALUOp::ADD_I32,in_a:ALUInput::PREV(0),in_b:ALUInput::PREV(1), target: 0}
+                ;1]
         };
 
-        let (snd, i0) = parent.bounded(CHAN_SIZE);
+        let (snd0, i0) = parent.bounded(CHAN_SIZE);
+        let (snd1, i1) = parent.bounded(CHAN_SIZE);
         let (o0, rcv) = parent.bounded(CHAN_SIZE);
 
-        let pcu = PCU::new(hw_config, rt_config, i0, o0);
+        let pcu = PCU::new(hw_config, rt_config, vec![i0, i1], vec![o0]);
 
-        let snd_gen = (0..10).map(|x| {
-            PCUData{data: vec![
-                Scalar::I32(x), Scalar::I32(2*x)
-                ]}
+        let snd0_gen = (0..10).map(|x| {
+            PCUData{data: vec![Scalar::I32(x)]}
         });
 
-        let rcv_gen = std::iter::once(0).chain(0..10).map(|x| {
+        let snd1_gen = (0..10).map(|x| {
+            PCUData{data: vec![Scalar::I32(2*x)]}
+        });
+
+        let rcv_gen = (0..10).map(|x| {
             PCUData{data: vec![
-                Scalar::I32(3*x), Scalar::I32(0)
+                Scalar::I32(3*x)
             ]}
         });
 
-        let gen = GeneratorContext::new(|| {snd_gen}, snd);
+        let gen0 = GeneratorContext::new(|| {snd0_gen}, snd0);
+        let gen1 = GeneratorContext::new(|| {snd1_gen}, snd1);
         let rcv = CheckerContext::new(|| {rcv_gen}, rcv);
 
-        parent.add_child(gen);
+        parent.add_child(gen0);
+        parent.add_child(gen1);
         parent.add_child(rcv);
         parent.add_child(pcu);
         let executed = parent
             .initialize(InitializationOptionsBuilder::default().build().unwrap())
             .unwrap()
             .run(RunOptions::default());
+        println!("dump_failures: {:?}", executed.dump_failures());
         assert!(executed.passed());
     }
 }

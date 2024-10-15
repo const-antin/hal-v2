@@ -1,13 +1,13 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, hash::Hash};
 
 use crate::scalar::Scalar;
 
 // This should maybe be moved to pcu.rs or to pipeline_stage.rs.
 // TODO: Change the names instead of supressing the warnings.
 #[allow(non_camel_case_types)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum ALUInput {
-    PREV, PREV_BELOW, NEXT
+    PREV(usize), PREV_BELOW(usize), NEXT(usize), CONSTANT(Scalar) // The usize is the index of the vector input to use. 
 }
 
 #[derive(PartialEq, Eq, Hash, Copy, Clone)]
@@ -21,7 +21,23 @@ pub enum ALUOp {
 pub struct ALURtConfig {
     pub op: ALUOp,
     pub in_a: ALUInput,
-    pub in_b: ALUInput
+    pub in_b: ALUInput,
+    pub target: usize // Index of the next pipeline register to use.
+}
+
+impl ALURtConfig {
+    pub fn get_input_regs(&self) -> HashSet<usize> {
+        let mut input_regs = Vec::new();
+        for input in [self.in_a, self.in_b].iter() {   
+            match input {
+                ALUInput::PREV(i) => input_regs.push(*i),
+                ALUInput::PREV_BELOW(i) => input_regs.push(*i),
+                ALUInput::NEXT(i) => input_regs.push(*i),
+                ALUInput::CONSTANT(_) => ()
+            }
+        }
+        input_regs.into_iter().collect()
+    }
 }
 
 #[derive(Clone)]

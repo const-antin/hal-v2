@@ -1,4 +1,4 @@
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum Scalar {
     I32(i32), FP32(f32), Bit(bool), DontCare, Empty
 }

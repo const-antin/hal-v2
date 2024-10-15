@@ -71,13 +71,14 @@ impl Switch {
                 return vec![];
             }
 
-            let timing_of_inputs = peek_results.map(|(r, x)| match x {
+            let timing_of_inputs = peek_results.map(|(r, x)| {
+                match x {
                 PeekResult::Something(ChannelElement { time: t, data: _ }) => (r, x, t),
                 PeekResult::Nothing(t) => (r, x, t),
                 _ => panic!("This should always be something.")
-            });
+            }});
 
-            let (_, first_channels) = timing_of_inputs.fold((Time::infinite(), Vec::new()), |(min, mut vec), el| {
+            let (min, first_channels) = timing_of_inputs.fold((Time::infinite(), Vec::new()), |(min, mut vec), el| {
                 let (r, pr, t) = el;
                 if t < min {
                     vec.clear();
@@ -100,7 +101,7 @@ impl Switch {
             if !avail_channels.is_empty() {
                 minimal_input = avail_channels;
                 break;
-            } else if first_channels.len() == self.hw_config.num_inputs {
+            } else if min >= self.time.tick() {
                 // All channels have no data at the current clock cycle. Advance clock. 
                 // This is needed because DAM's peek() caches the last result.
                 self.time.incr_cycles(1);

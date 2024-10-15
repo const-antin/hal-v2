@@ -28,7 +28,7 @@ impl PipelineStage {
     // TODO: There are still many open questions here. For instance, we currently move values in the pipeline
     // that are actually computed on by the ALU. We could, however, also move every value in the pipeline
     // regardless of if it is computed on or not. The Plasticine paper does not describe how this is done. 
-    pub fn iter(&mut self, prev_stage: &Vec<Vec<Scalar>>, time: Time) -> (&Vec<Vec<Scalar>>, Time) {
+    pub fn iterate(&mut self, prev_stage: &Vec<Vec<Scalar>>, time: Time) -> (&Vec<Vec<Scalar>>, Time) {
         let mut next_data = vec![vec![Scalar::I32(0); self.data.len()]];
 
         for idx in 0..self.simd {
@@ -44,8 +44,14 @@ impl PipelineStage {
 
     fn get_input(&self, alu_input: &ALUInput, prev_stage: &Vec<Vec<Scalar>>, idx: usize) -> Scalar {
         match alu_input {
-            ALUInput::NEXT(register_sel) => self.data[*register_sel][idx].clone(),
-            ALUInput::PREV(register_sel) => prev_stage[*register_sel][idx].clone(),
+            ALUInput::NEXT(register_sel) => self.data
+                .get(*register_sel).expect("Error: Selected Pipeline Register Set does not exist.")
+                .get(idx).expect("Error: ALU Input NEXT({register_sel}) does not exist.")
+                .clone(),
+            ALUInput::PREV(register_sel) => prev_stage
+                .get(*register_sel).expect("Error: Selected Pipeline Register Set does not exist.")
+                .get(idx).expect("Error: ALU Input NEXT({register_sel}) does not exist.")
+                .clone(),
             ALUInput::PREV_BELOW(register_sel) => prev_stage[*register_sel].get(idx+1)
                 .expect(r#"Selected ALU Input "PREV_BELOW" does not exist."#).clone(),
             ALUInput::CONSTANT(x) => x.clone()
@@ -77,9 +83,9 @@ mod tests {
         let mut pl = prepare();
         let input = vec![vec![Scalar::I32(1)]];
 
-        let (_, t_1) = pl.iter(&input, t_0);
+        let (_, t_1) = pl.iterate(&input, t_0);
         assert_eq!(pl.data[0][0], Scalar::I32(1));
-        let _ = pl.iter(&input, t_1);
+        let _ = pl.iterate(&input, t_1);
         assert_eq!(pl.data[0][0], Scalar::I32(2));
     }
 
