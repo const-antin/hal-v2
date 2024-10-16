@@ -10,17 +10,20 @@ pub enum SwitchMode {
     MultiEnqueueMultiDequeue    // 3. Dequeue from all inputs, enqueue to all outputs.
 }
 
+type DelayFunction = fn(usize, usize) -> usize;
+
 pub struct HwConfig {
     pub simd: usize, 
     pub datatype_width: usize, 
     pub num_inputs: usize,
     pub num_outputs: usize,
-    pub mode: SwitchMode
-    // todo: Add parameterizable routing restructions? 
+    pub mode: SwitchMode,
+    pub delay: DelayFunction // delay_table[in, out -> delay
+    // todo: Add parameterizable routing restrictions? 
 }
 
 pub struct RtConfig {
-    pub routing_table: HashMap<usize, Vec<usize>> // routing_table[in] -> out
+    pub routing_table: HashMap<usize, Vec<usize>>, // routing_table[in] -> out
 }
 
 pub struct RtData {
@@ -118,7 +121,10 @@ impl Switch {
         let targets = self.rt_config.routing_table.get(&rdy_idx).expect("Received data from unrouted input!");
         for o_idx in targets {
             let target = &self.rt_data.senders[*o_idx];
-            target.enqueue(&self.time, ChannelElement::new(self.time.tick() /* todo: add routing delay here */, data.clone())).unwrap();
+            target.enqueue(&self.time, 
+                ChannelElement::new(
+                    self.time.tick() + (self.hw_config.delay)(rdy_idx, *o_idx) as u64,
+                    data.clone())).unwrap();
             if !multi_enqueue {
                 self.time.incr_cycles(1);
             }
@@ -177,11 +183,14 @@ mod tests {
     fn test_passthrough() {
         let mut parent = ProgramBuilder::default();
         const CHAN_SIZE: usize = 8;
+        const SWITCH_DELAY: usize = 1;
 
         let (snd, input) = parent.bounded(CHAN_SIZE);
         let (output, rcv) = parent.bounded(CHAN_SIZE);
 
         let map: HashMap<_, _> = [(0, vec![0])].into_iter().collect();
+
+        fn switch_delay(_: usize, _: usize) -> usize { SWITCH_DELAY }
 
         let switch = Switch::new(
             HwConfig {
@@ -189,7 +198,8 @@ mod tests {
                 datatype_width: Scalar::I32(0).width(),
                 num_inputs: 1,
                 num_outputs: 1,
-                mode: SwitchMode::SingleEnqueueSingleDequeue
+                mode: SwitchMode::SingleEnqueueSingleDequeue,
+                delay: switch_delay,
             }, 
             RtConfig {
                 routing_table: map,
@@ -216,7 +226,7 @@ mod tests {
     #[test]
     fn test_route() {
         let mut parent = ProgramBuilder::default();
-        let CHAN_SIZE: usize = 8;
+        const CHAN_SIZE: usize = 8;
 
         let (inputs_snd0, inputs_rcv0) = parent.bounded(CHAN_SIZE);
         let (inputs_snd1, inputs_rcv1) = parent.bounded(CHAN_SIZE);
@@ -226,13 +236,16 @@ mod tests {
 
         let table: HashMap<_, _> = [(0,vec![1])].into_iter().collect(); // TODO: Should this thing be able to route multiple things at once? 
         
+        fn delay_fn(_: usize, _: usize) -> usize { 1 }
+
         let switch = Switch::new(
             HwConfig {
                 simd: 1,
                 datatype_width: Scalar::I32(0).width(),
                 num_inputs: 2,
                 num_outputs: 2,
-                mode: SwitchMode::SingleEnqueueSingleDequeue
+                mode: SwitchMode::SingleEnqueueSingleDequeue,
+                delay: delay_fn,
             }, 
             RtConfig {
                 routing_table: table,
@@ -263,8 +276,9 @@ mod tests {
     #[test]
     fn test_broadcast() {
         let mut parent = ProgramBuilder::default();
-        let CHAN_SIZE: usize = 8;
-        let NUM_ELEMENTS: i32 = 10;
+        const CHAN_SIZE: usize = 8;
+        const NUM_ELEMENTS: i32 = 10;
+        const SWITCH_DELAY: usize = 2;
 
         let (snd, input) = parent.bounded(CHAN_SIZE);
         let (output0, rcv0) = parent.bounded(CHAN_SIZE);
@@ -272,13 +286,16 @@ mod tests {
 
         let table: HashMap<_, _> = [(0,vec![0,1])].into_iter().collect(); // TODO: Should this thing be able to route multiple things at once? 
 
+        fn delay_fn(_: usize, _: usize) -> usize { SWITCH_DELAY }
+
         let switch = Switch::new(
             HwConfig {
                 simd: 1,
                 datatype_width: Scalar::I32(0).width(),
                 num_inputs: 1,
                 num_outputs: 2,
-                mode: SwitchMode::SingleEnqueueSingleDequeue
+                mode: SwitchMode::SingleEnqueueSingleDequeue,
+                delay: delay_fn,
             }, 
             RtConfig {
                 routing_table: table,
@@ -306,7 +323,7 @@ mod tests {
             .unwrap()
             .run(RunOptions::default());
         executed.dump_failures();
-        assert_eq!(executed.elapsed_cycles().unwrap(), NUM_ELEMENTS as u64 * 2 + 1);
+        assert_eq!(executed.elapsed_cycles().unwrap(), NUM_ELEMENTS as u64 * 2 + SWITCH_DELAY as u64);
         assert!(executed.passed());
     }
 }

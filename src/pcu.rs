@@ -83,7 +83,7 @@ impl PCU {
         self.rt_data.output
             .iter()
             .zip(data_out.iter())
-            .filter(|(sender, data)| {data.len() > 0})
+            .filter(|(_, data)| {data.len() > 0})
             .for_each(|(sender, data)| {
                 sender.enqueue(&self.time, ChannelElement::new(t_fin, PCUData { data: data.clone() })).unwrap();
         });
@@ -141,7 +141,7 @@ impl Context for PCU {
 mod tests {
     use std::collections::HashSet;
 
-    use dam::{simulation::{InitializationOptionsBuilder, ProgramBuilder, RunOptions}, utility_contexts::{CheckerContext, GeneratorContext, PrinterContext}};
+    use dam::{simulation::{InitializationOptionsBuilder, ProgramBuilder, RunOptions}, utility_contexts::{CheckerContext, GeneratorContext}};
 
     use crate::{alu::{ALUHwConfig, ALUInput, ALUOp, ALURtConfig}, pcu::PCUData, scalar::Scalar};
 
@@ -188,8 +188,7 @@ mod tests {
 
         let gen0 = GeneratorContext::new(|| {snd0_gen}, snd0);
         let gen1 = GeneratorContext::new(|| {snd1_gen}, snd1);
-        // let rcv = CheckerContext::new(|| {rcv_gen}, rcv);
-        let rcv = PrinterContext::new(rcv);
+        let rcv = CheckerContext::new(|| {rcv_gen}, rcv);
 
         parent.add_child(gen0);
         parent.add_child(gen1);
@@ -200,9 +199,8 @@ mod tests {
             .unwrap()
             .run(RunOptions::default());
 
-        let NUM_ELEMENTS = 10;
-        let INPUT_CHANNEL_LATENCY = 1;
-        assert_eq!(executed.elapsed_cycles().unwrap(), NUM_ELEMENTS + INPUT_CHANNEL_LATENCY + ALUOp::ADD_I32.delay() as u64);
+        const NUM_ELEMENTS: u64 = 10;
+        assert_eq!(executed.elapsed_cycles().unwrap(), NUM_ELEMENTS + ALUOp::ADD_I32.delay() as u64);
         assert!(executed.passed());
     }
 }
