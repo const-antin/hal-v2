@@ -119,12 +119,12 @@ impl Switch {
         for o_idx in targets {
             let target = &self.rt_data.senders[*o_idx];
             target.enqueue(&self.time, ChannelElement::new(self.time.tick() /* todo: add routing delay here */, data.clone())).unwrap();
-            if multi_enqueue {
+            if !multi_enqueue {
                 self.time.incr_cycles(1);
             }
         }
 
-        if !multi_enqueue {
+        if multi_enqueue {
             self.time.incr_cycles(1);
         }
         Ok(())
