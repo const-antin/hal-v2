@@ -264,6 +264,7 @@ mod tests {
     fn test_broadcast() {
         let mut parent = ProgramBuilder::default();
         let CHAN_SIZE: usize = 8;
+        let NUM_ELEMENTS: i32 = 10;
 
         let (snd, input) = parent.bounded(CHAN_SIZE);
         let (output0, rcv0) = parent.bounded(CHAN_SIZE);
@@ -289,12 +290,12 @@ mod tests {
         let gen = GeneratorContext::new( 
             // TODO: There is something weird happening here: After _some_ runs, the Generator just does not generate. 
             // Seemingly, it never is scheduled or something? peek() always just returns time(0).
-            || {0..10}.map(|x| PCUData {data: vec![Scalar::I32(x)]}), snd);
+            || {0..NUM_ELEMENTS}.map(|x| PCUData {data: vec![Scalar::I32(x)]}), snd);
 
         let rcv0 = CheckerContext::new(
-            || {0..10}.map(|x| PCUData {data: vec![Scalar::I32(x)]}), rcv0);
+            || {0..NUM_ELEMENTS}.map(|x| PCUData {data: vec![Scalar::I32(x)]}), rcv0);
         let rcv1 = CheckerContext::new(
-            || {0..10}.map(|x| PCUData {data: vec![Scalar::I32(x)]}), rcv1);
+            || {0..NUM_ELEMENTS}.map(|x| PCUData {data: vec![Scalar::I32(x)]}), rcv1);
 
         parent.add_child(gen);
         parent.add_child(rcv0);
@@ -305,6 +306,7 @@ mod tests {
             .unwrap()
             .run(RunOptions::default());
         executed.dump_failures();
+        assert_eq!(executed.elapsed_cycles().unwrap(), NUM_ELEMENTS as u64 * 2 + 1);
         assert!(executed.passed());
     }
 }

@@ -1,6 +1,6 @@
 use dam::{channel::{ChannelElement, Receiver, Sender}, context::Context, dam_macros::context_macro, structures::Time, types::DAMType};
 
-use crate::{alu::{ALUHwConfig, ALURtConfig}, pipeline_stage::{self, PipelineStage}, scalar::Scalar};
+use crate::{alu::{ALUHwConfig, ALURtConfig}, pipeline_stage::PipelineStage, scalar::Scalar};
 
 #[derive(Clone)]
 pub struct HwConfig {
@@ -112,10 +112,6 @@ impl Context for PCU {
 
     fn run(&mut self) {
         loop {
-            let old_time = self.time.tick();
-            // Get next input, insert bubbles if there was a delay.
-            // TODO: Only get input from selected input channels. 
-
             // Dequeue from every ALU selected input:
             let selected_inputs = self.rt_config.alu_configs[0].get_input_regs();
 
@@ -145,7 +141,7 @@ impl Context for PCU {
 mod tests {
     use std::collections::HashSet;
 
-    use dam::{simulation::{InitializationOptionsBuilder, ProgramBuilder, RunOptions}, utility_contexts::{CheckerContext, GeneratorContext}};
+    use dam::{simulation::{InitializationOptionsBuilder, ProgramBuilder, RunOptions}, utility_contexts::{CheckerContext, GeneratorContext, PrinterContext}};
 
     use crate::{alu::{ALUHwConfig, ALUInput, ALUOp, ALURtConfig}, pcu::PCUData, scalar::Scalar};
 
@@ -154,7 +150,7 @@ mod tests {
     #[test]
     fn simple_pcu_test() {
         let mut parent = ProgramBuilder::default();
-        const CHAN_SIZE: usize = 1;
+        const CHAN_SIZE: usize = 8;
         
         let hw_config = HwConfig {
             alu_configs: vec![ALUHwConfig {
@@ -192,7 +188,8 @@ mod tests {
 
         let gen0 = GeneratorContext::new(|| {snd0_gen}, snd0);
         let gen1 = GeneratorContext::new(|| {snd1_gen}, snd1);
-        let rcv = CheckerContext::new(|| {rcv_gen}, rcv);
+        // let rcv = CheckerContext::new(|| {rcv_gen}, rcv);
+        let rcv = PrinterContext::new(rcv);
 
         parent.add_child(gen0);
         parent.add_child(gen1);
@@ -202,7 +199,10 @@ mod tests {
             .initialize(InitializationOptionsBuilder::default().build().unwrap())
             .unwrap()
             .run(RunOptions::default());
-        println!("dump_failures: {:?}", executed.dump_failures());
+
+        let NUM_ELEMENTS = 10;
+        let INPUT_CHANNEL_LATENCY = 1;
+        assert_eq!(executed.elapsed_cycles().unwrap(), NUM_ELEMENTS + INPUT_CHANNEL_LATENCY + ALUOp::ADD_I32.delay() as u64);
         assert!(executed.passed());
     }
 }
