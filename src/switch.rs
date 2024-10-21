@@ -284,22 +284,23 @@ mod tests {
         let (output0, rcv0) = parent.bounded(CHAN_SIZE);
         let (output1, rcv1) = parent.bounded(CHAN_SIZE);
 
-        let table: HashMap<_, _> = [(0,vec![0,1])].into_iter().collect(); // TODO: Should this thing be able to route multiple things at once? 
-
         fn delay_fn(_: usize, _: usize) -> usize { SWITCH_DELAY }
 
+        let hwConfig = HwConfig {
+            simd: 1,
+            datatype_width: Scalar::I32(0).width(),
+            num_inputs: 1,
+            num_outputs: 2,
+            mode: SwitchMode::SingleEnqueueSingleDequeue,
+            delay: delay_fn,
+        };
+
+        let rtConfig = RtConfig {
+            routing_table: [(0,vec![0,1])].into_iter().collect(),
+        };
+
         let switch = Switch::new(
-            HwConfig {
-                simd: 1,
-                datatype_width: Scalar::I32(0).width(),
-                num_inputs: 1,
-                num_outputs: 2,
-                mode: SwitchMode::SingleEnqueueSingleDequeue,
-                delay: delay_fn,
-            }, 
-            RtConfig {
-                routing_table: table,
-            },
+            hwConfig, rtConfig, 
             vec![input],
             vec![output0, output1]
         );

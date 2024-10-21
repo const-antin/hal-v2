@@ -162,7 +162,10 @@ mod tests {
 
         let rt_config = RtConfig {
             alu_configs: vec![
-                ALURtConfig{op:ALUOp::ADD_I32,in_a:ALUInput::PREV(0),in_b:ALUInput::PREV(1), target: 0}
+                ALURtConfig{op:ALUOp::ADD_I32,
+                            in_a:ALUInput::PREV(0),
+                            in_b:ALUInput::PREV(1),
+                            target: 0}
                 ;1]
         };
 

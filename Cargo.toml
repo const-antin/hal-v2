@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 dam = {git = "https://github.com/stanford-ppl/DAM-RS.git"}
+hop = {git = "ssh://git@github.com/stanford-ppl/Hop.git", branch="program-graph"}

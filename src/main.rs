@@ -5,6 +5,7 @@ mod interconnect;
 mod scalar;
 mod pipeline_stage;
 mod switch;
+mod hop_lower;
 
 fn main() {
     println!("Hello, world!");
